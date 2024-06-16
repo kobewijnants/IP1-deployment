@@ -1,0 +1,7 @@
+.vscode
+.idea
+
+Scripts/config.sh
+Scripts/env-var
+
+Scripts/service-account-key.json

@@ -1,0 +1,220 @@
+= Readme =
+
+== Introduction ==
+
+Welcome to the deployment repository of the Inclusion Innocators. This is where you can everything about the deployment part of our project, from documentation to the actual scripts that will automate the whole process.
+
+== Scripts ==
+
+You can find the scripts for: starting, stopping and backing up the project in the *Scripts* folder.
+
+.`Deploy.sh` Functionality
+- Creates a new project
+- Links the projeect to a billing account
+- Enables all the necessary APIs
+- Creates new service accounts with the necessary roles
+- Creates a new network where the instance will live inside
+- Sets up the firewall rules on the newly created network
+- Creates a new database
+- Creates a new redis instance
+- Creates a new bucket
+- creates a secret manager for transferring the variables to the instances
+- Creates a new instance group with autoscaling
+- Creates a new loadbalancer
+- Creates a new ssl certificate (if https is used)
+
+.`Startup.sh` Functionality
+- Installs Ops agent
+- Clones the repo
+- Builds the project
+- Starts the project with a systemd service using a non-root user
+
+.`Backup.sh` Functionality
+- Creates a backup of the database
+
+.`Restore.sh` Functionality
+- Restores a backup of the database
+
+.`Update.sh` Functionality
+- Lets you choose a project to update
+- Updates the instances one by one
+
+.`Cleanup.sh` Functionality
+ - Deletes all the resources inside a project except api's and billing account
+
+.`ddns.sh` Functionality
+- Updates the external ip of the loadbalancer to the cloudflare dns record
+
+.`test_downtime.sh` Functionality
+- Tests the downtime of the application during an update
+
+== Usage ==
+
+=== Step 0: Requirements ===
+
+- Gcloud SDK should be installed on your local machine
+https://cloud.google.com/sdk/docs/install
+
+- Login to the Gcloud SDK
+
+[source,bash]
+----
+gcloud init
+----
+
+- A billing account with credits
+
+=== Step 1: config.sh ===
+
+Get `Scripts/templates/config.sh` and paste it in `Scripts/config.sh` fill in the following variables:
+
+|===
+| Variable | Description
+
+| PROJECT_ID | The project id of the project you want to create.
+| REGION | The link:https://cloud.google.com/compute/docs/regions-zones[region] where the application should be deployed.
+| ZONE | The link:https://cloud.google.com/compute/docs/regions-zones[zone] where the application should be deployed.
+| VM_MACHINE_TYPE | The link:https://gcloud-compute.com/instances.html[machine type] of the vm's.
+| MIN_INSTANCES | Minimum count of running instances.
+| MAX_INSTANCES | Maximum count of running instances.
+| DB_TIER | The machine type of the database.
+| HTTPS | Usage of HTTPS or HTTP.
+| DOMAIN | The domain of the application.
+| TOKEN | The access token of gitlab project settings > access token.
+| REPO | URL to the gitlab repository of the application.
+|===
+
+Get `Scripts/templates/env-var` and paste in  `Scripts/env-var`
+
+=== Step 2: Deploy.sh ===
+
+Run the following script and wait for it to finish.
+
+[source,bash]
+----
+./Deploy.sh
+----
+
+=== Step 3: SSL ===
+
+Wait for the ssl certificate to be ACTIVE (if https is used)
+
+[source,bash]
+----
+gcloud compute ssl-certificates list
+----
+
+=== Step 4: Test ===
+
+Browse to the domain or to the external IP of the loadbalancer
+
+[source,bash]
+----
+gcloud compute forwarding-rules list
+----
+
+To check if the application is online
+
+[source,bash]
+----
+curl http://[external_ip/domain]/health
+----
+
+== Backups and restores ==
+
+=== Backup ===
+
+To make a backup use:
+
+[source,bash]
+----
+./Backup.sh
+----
+
+- Choose the gcloud project.
+- Choose the database instance.
+
+To schedule backups use crontab (<https://crontab.guru/>)
+
+[source,bash]
+----
+0 3 * * * /path/to/Backup.sh -i [database_instance] -p [project_id]
+----
+
+=== Restore ===
+
+To make a restore of a previous backup use:
+
+[source,bash]
+----
+./Restore.sh
+----
+
+- Choose the gcloud project.
+- Choose the database instance.
+- Choose a backup_id out a list of previous backups.
+
+== Zero-downtime updates ==
+
+The `Scripts/Update.sh` script will loop through every instance and update them one at a time.
+
+MIN_INSTANCES should be set to at least 2
+
+=== Usage ===
+
+[source,bash]
+----
+./Update.sh
+----
+
+- Choose the project
+- Wait for every instance to update
+
+== DDNS ==
+
+The `Scripts/ddns.sh` script will update the external ip of the loadbalancer to the cloudflare dns record using the cloudflare api
+
+To use this you will need a domain registered in cloudflare dns and then fill in the following variables in the `config.sh` script
+
+|===
+| Variable | Description 
+
+| auth_email | The email used to login 'https://dash.cloudflare.com' 
+| auth_method | Set to "global" for Global API Key or "token" for Scoped API Token 
+| auth_key | Your API Token or Global API Key of cloudflare 
+| zone_identifier | Can be found in the "Overview" tab of your domain 
+| record_name | Which record you want to be synced (phygital.exmample.com) 
+| ttl | Set the DNS TTL (seconds) 
+| sitename | Title of site "Example Site" 
+|===
+
+== Deletetion of project ==
+
+=== Destroy.sh ===
+
+Destroy.sh will ask for a project ID and then it will delete the whole project with its resources.
+
+[source,bash]
+----
+./Destroy.sh
+----
+
+=== Cleanup.sh ===
+
+Cleanup.sh will ask for a project ID and then it will delete everything inside a project
+
+[source,bash]
+----
+./Cleanup.sh
+----
+
+== test_downtime.sh ==
+
+You can test the downtime during an update using the `test_downtime.sh` script.
+
+[source, bash]
+----
+./test_downtime.sh
+----
+
+During my tests none of the requests failed.
